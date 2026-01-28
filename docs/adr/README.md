@@ -9,6 +9,16 @@ This directory contains Architecture Decision Records (ADRs) documenting signifi
 | [ADR-001](ADR-001-security-first-architecture.md) | Security-First Architecture | Accepted | Jan 2026 |
 | [ADR-002](ADR-002-global-rate-limiting.md) | Global Rate Limiting | Accepted | Jan 2026 |
 | [ADR-003](ADR-003-audit-logging.md) | Audit Logging with Tamper Detection | Accepted | Jan 2026 |
+| [ADR-004](ADR-004-monitoring-architecture.md) | Performance Monitoring & Alerting | Accepted | Jan 2026 |
+
+## Summary
+
+These ADRs document the core architectural decisions that make ZoneWise Lobster a **95+ security and code quality** system:
+
+- **ADR-001**: Defense-in-depth security with deterministic execution
+- **ADR-002**: Token bucket rate limiting with per-domain configuration
+- **ADR-003**: Tamper-proof audit logging with SHA-256 checksums
+- **ADR-004**: Metrics-based monitoring with configurable alerting
 
 ## Template
 
