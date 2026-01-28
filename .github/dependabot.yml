@@ -1,0 +1,63 @@
+# Dependabot configuration for ZoneWise Lobster
+# Implements automated dependency scanning (Issue #3)
+
+version: 2
+updates:
+  # Python dependencies
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "security"
+      - "automated"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    reviewers:
+      - "breverdbidder"
+    # Group minor/patch updates together
+    groups:
+      security-updates:
+        patterns:
+          - "*"
+        update-types:
+          - "security"
+      minor-updates:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "automated"
+    commit-message:
+      prefix: "ci"
+
+  # Docker (if Dockerfile exists)
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "docker"
+      - "automated"
