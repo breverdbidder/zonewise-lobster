@@ -1,0 +1,568 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "created": "2026-01-28",
+    "description": "Florida 67 counties with FIPS codes, population tiers, and Municode URLs",
+    "source": "US Census Bureau + Municode Library"
+  },
+  "counties": [
+    {
+      "name": "Alachua",
+      "fips": "12001",
+      "seat": "Gainesville",
+      "population": 285254,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/alachua_county"
+    },
+    {
+      "name": "Baker",
+      "fips": "12003",
+      "seat": "Macclenny",
+      "population": 29511,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/baker_county"
+    },
+    {
+      "name": "Bay",
+      "fips": "12005",
+      "seat": "Panama City",
+      "population": 180682,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/bay_county"
+    },
+    {
+      "name": "Bradford",
+      "fips": "12007",
+      "seat": "Starke",
+      "population": 28521,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/bradford_county"
+    },
+    {
+      "name": "Brevard",
+      "fips": "12009",
+      "seat": "Titusville",
+      "population": 606612,
+      "tier": 1,
+      "municode_url": "https://library.municode.com/fl/brevard_county",
+      "gis_url": "https://gis.brevardfl.gov/gissrv/rest/services/Planning_Development/Zoning_WKID2881/MapServer/0",
+      "notes": "POC complete - Malabar methodology validated"
+    },
+    {
+      "name": "Broward",
+      "fips": "12011",
+      "seat": "Fort Lauderdale",
+      "population": 1944375,
+      "tier": 1,
+      "municode_url": "https://library.municode.com/fl/broward_county"
+    },
+    {
+      "name": "Calhoun",
+      "fips": "12013",
+      "seat": "Blountstown",
+      "population": 14598,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/calhoun_county"
+    },
+    {
+      "name": "Charlotte",
+      "fips": "12015",
+      "seat": "Punta Gorda",
+      "population": 192736,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/charlotte_county"
+    },
+    {
+      "name": "Citrus",
+      "fips": "12017",
+      "seat": "Inverness",
+      "population": 154879,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/citrus_county"
+    },
+    {
+      "name": "Clay",
+      "fips": "12019",
+      "seat": "Green Cove Springs",
+      "population": 226195,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/clay_county"
+    },
+    {
+      "name": "Collier",
+      "fips": "12021",
+      "seat": "Naples",
+      "population": 393973,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/collier_county"
+    },
+    {
+      "name": "Columbia",
+      "fips": "12023",
+      "seat": "Lake City",
+      "population": 71686,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/columbia_county"
+    },
+    {
+      "name": "DeSoto",
+      "fips": "12027",
+      "seat": "Arcadia",
+      "population": 38001,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/desoto_county"
+    },
+    {
+      "name": "Dixie",
+      "fips": "12029",
+      "seat": "Cross City",
+      "population": 17492,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/dixie_county"
+    },
+    {
+      "name": "Duval",
+      "fips": "12031",
+      "seat": "Jacksonville",
+      "population": 995567,
+      "tier": 1,
+      "municode_url": "https://library.municode.com/fl/jacksonville"
+    },
+    {
+      "name": "Escambia",
+      "fips": "12033",
+      "seat": "Pensacola",
+      "population": 321047,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/escambia_county"
+    },
+    {
+      "name": "Flagler",
+      "fips": "12035",
+      "seat": "Bunnell",
+      "population": 119254,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/flagler_county"
+    },
+    {
+      "name": "Franklin",
+      "fips": "12037",
+      "seat": "Apalachicola",
+      "population": 12506,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/franklin_county"
+    },
+    {
+      "name": "Gadsden",
+      "fips": "12039",
+      "seat": "Quincy",
+      "population": 45660,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/gadsden_county"
+    },
+    {
+      "name": "Gilchrist",
+      "fips": "12041",
+      "seat": "Trenton",
+      "population": 18631,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/gilchrist_county"
+    },
+    {
+      "name": "Glades",
+      "fips": "12043",
+      "seat": "Moore Haven",
+      "population": 13576,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/glades_county"
+    },
+    {
+      "name": "Gulf",
+      "fips": "12045",
+      "seat": "Port St. Joe",
+      "population": 16327,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/gulf_county"
+    },
+    {
+      "name": "Hamilton",
+      "fips": "12047",
+      "seat": "Jasper",
+      "population": 14428,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/hamilton_county"
+    },
+    {
+      "name": "Hardee",
+      "fips": "12049",
+      "seat": "Wauchula",
+      "population": 26936,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/hardee_county"
+    },
+    {
+      "name": "Hendry",
+      "fips": "12051",
+      "seat": "LaBelle",
+      "population": 42543,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/hendry_county"
+    },
+    {
+      "name": "Hernando",
+      "fips": "12053",
+      "seat": "Brooksville",
+      "population": 199894,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/hernando_county"
+    },
+    {
+      "name": "Highlands",
+      "fips": "12055",
+      "seat": "Sebring",
+      "population": 106306,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/highlands_county"
+    },
+    {
+      "name": "Hillsborough",
+      "fips": "12057",
+      "seat": "Tampa",
+      "population": 1512070,
+      "tier": 1,
+      "municode_url": "https://library.municode.com/fl/hillsborough_county"
+    },
+    {
+      "name": "Holmes",
+      "fips": "12059",
+      "seat": "Bonifay",
+      "population": 19617,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/holmes_county"
+    },
+    {
+      "name": "Indian River",
+      "fips": "12061",
+      "seat": "Vero Beach",
+      "population": 165955,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/indian_river_county"
+    },
+    {
+      "name": "Jackson",
+      "fips": "12063",
+      "seat": "Marianna",
+      "population": 47430,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/jackson_county"
+    },
+    {
+      "name": "Jefferson",
+      "fips": "12065",
+      "seat": "Monticello",
+      "population": 14903,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/jefferson_county"
+    },
+    {
+      "name": "Lafayette",
+      "fips": "12067",
+      "seat": "Mayo",
+      "population": 8422,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/lafayette_county"
+    },
+    {
+      "name": "Lake",
+      "fips": "12069",
+      "seat": "Tavares",
+      "population": 401834,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/lake_county"
+    },
+    {
+      "name": "Lee",
+      "fips": "12071",
+      "seat": "Fort Myers",
+      "population": 822779,
+      "tier": 1,
+      "municode_url": "https://library.municode.com/fl/lee_county"
+    },
+    {
+      "name": "Leon",
+      "fips": "12073",
+      "seat": "Tallahassee",
+      "population": 294629,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/leon_county"
+    },
+    {
+      "name": "Levy",
+      "fips": "12075",
+      "seat": "Bronson",
+      "population": 43188,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/levy_county"
+    },
+    {
+      "name": "Liberty",
+      "fips": "12077",
+      "seat": "Bristol",
+      "population": 8354,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/liberty_county"
+    },
+    {
+      "name": "Madison",
+      "fips": "12079",
+      "seat": "Madison",
+      "population": 18493,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/madison_county"
+    },
+    {
+      "name": "Manatee",
+      "fips": "12081",
+      "seat": "Bradenton",
+      "population": 403253,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/manatee_county"
+    },
+    {
+      "name": "Marion",
+      "fips": "12083",
+      "seat": "Ocala",
+      "population": 384323,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/marion_county"
+    },
+    {
+      "name": "Martin",
+      "fips": "12085",
+      "seat": "Stuart",
+      "population": 158791,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/martin_county"
+    },
+    {
+      "name": "Miami-Dade",
+      "fips": "12086",
+      "seat": "Miami",
+      "population": 2716940,
+      "tier": 1,
+      "municode_url": "https://library.municode.com/fl/miami_-_dade_county"
+    },
+    {
+      "name": "Monroe",
+      "fips": "12087",
+      "seat": "Key West",
+      "population": 82874,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/monroe_county"
+    },
+    {
+      "name": "Nassau",
+      "fips": "12089",
+      "seat": "Fernandina Beach",
+      "population": 93617,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/nassau_county"
+    },
+    {
+      "name": "Okaloosa",
+      "fips": "12091",
+      "seat": "Crestview",
+      "population": 215166,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/okaloosa_county"
+    },
+    {
+      "name": "Okeechobee",
+      "fips": "12093",
+      "seat": "Okeechobee",
+      "population": 42168,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/okeechobee_county"
+    },
+    {
+      "name": "Orange",
+      "fips": "12095",
+      "seat": "Orlando",
+      "population": 1441450,
+      "tier": 1,
+      "municode_url": "https://library.municode.com/fl/orange_county"
+    },
+    {
+      "name": "Osceola",
+      "fips": "12097",
+      "seat": "Kissimmee",
+      "population": 408750,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/osceola_county"
+    },
+    {
+      "name": "Palm Beach",
+      "fips": "12099",
+      "seat": "West Palm Beach",
+      "population": 1496770,
+      "tier": 1,
+      "municode_url": "https://library.municode.com/fl/palm_beach_county"
+    },
+    {
+      "name": "Pasco",
+      "fips": "12101",
+      "seat": "Dade City",
+      "population": 589199,
+      "tier": 1,
+      "municode_url": "https://library.municode.com/fl/pasco_county"
+    },
+    {
+      "name": "Pinellas",
+      "fips": "12103",
+      "seat": "Clearwater",
+      "population": 974996,
+      "tier": 1,
+      "municode_url": "https://library.municode.com/fl/pinellas_county"
+    },
+    {
+      "name": "Polk",
+      "fips": "12105",
+      "seat": "Bartow",
+      "population": 753197,
+      "tier": 1,
+      "municode_url": "https://library.municode.com/fl/polk_county"
+    },
+    {
+      "name": "Putnam",
+      "fips": "12107",
+      "seat": "Palatka",
+      "population": 74521,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/putnam_county"
+    },
+    {
+      "name": "Santa Rosa",
+      "fips": "12113",
+      "seat": "Milton",
+      "population": 195896,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/santa_rosa_county"
+    },
+    {
+      "name": "Sarasota",
+      "fips": "12115",
+      "seat": "Sarasota",
+      "population": 434006,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/sarasota_county"
+    },
+    {
+      "name": "Seminole",
+      "fips": "12117",
+      "seat": "Sanford",
+      "population": 480587,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/seminole_county"
+    },
+    {
+      "name": "St. Johns",
+      "fips": "12109",
+      "seat": "St. Augustine",
+      "population": 284379,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/st._johns_county"
+    },
+    {
+      "name": "St. Lucie",
+      "fips": "12111",
+      "seat": "Fort Pierce",
+      "population": 349753,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/st._lucie_county"
+    },
+    {
+      "name": "Sumter",
+      "fips": "12119",
+      "seat": "Bushnell",
+      "population": 140503,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/sumter_county"
+    },
+    {
+      "name": "Suwannee",
+      "fips": "12121",
+      "seat": "Live Oak",
+      "population": 46512,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/suwannee_county"
+    },
+    {
+      "name": "Taylor",
+      "fips": "12123",
+      "seat": "Perry",
+      "population": 21950,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/taylor_county"
+    },
+    {
+      "name": "Union",
+      "fips": "12125",
+      "seat": "Lake Butler",
+      "population": 16302,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/union_county"
+    },
+    {
+      "name": "Volusia",
+      "fips": "12127",
+      "seat": "DeLand",
+      "population": 553284,
+      "tier": 1,
+      "municode_url": "https://library.municode.com/fl/volusia_county"
+    },
+    {
+      "name": "Wakulla",
+      "fips": "12129",
+      "seat": "Crawfordville",
+      "population": 36455,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/wakulla_county"
+    },
+    {
+      "name": "Walton",
+      "fips": "12131",
+      "seat": "DeFuniak Springs",
+      "population": 80426,
+      "tier": 2,
+      "municode_url": "https://library.municode.com/fl/walton_county"
+    },
+    {
+      "name": "Washington",
+      "fips": "12133",
+      "seat": "Chipley",
+      "population": 25672,
+      "tier": 3,
+      "municode_url": "https://library.municode.com/fl/washington_county"
+    }
+  ],
+  "tiers": {
+    "1": {
+      "description": "Major metros (500K+ population)",
+      "count": 12,
+      "priority": "high",
+      "scrape_frequency": "weekly"
+    },
+    "2": {
+      "description": "Secondary metros (100K-500K population)",
+      "count": 28,
+      "priority": "medium",
+      "scrape_frequency": "bi-weekly"
+    },
+    "3": {
+      "description": "Rural counties (<100K population)",
+      "count": 27,
+      "priority": "low",
+      "scrape_frequency": "monthly"
+    }
+  }
+}
