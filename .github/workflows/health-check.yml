@@ -1,0 +1,125 @@
+name: Health Check & Monitoring
+
+on:
+  schedule:
+    # Run every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  health-check:
+    name: System Health Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install httpx supabase
+      
+      - name: Run health check
+        id: health
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          python << 'HEALTH_SCRIPT'
+          import os
+          import json
+          from datetime import datetime, timezone
+          
+          # Check Supabase connectivity
+          supabase_url = os.environ.get("SUPABASE_URL", "")
+          supabase_key = os.environ.get("SUPABASE_KEY", "")
+          
+          health = {
+              "status": "healthy",
+              "timestamp": datetime.now(timezone.utc).isoformat(),
+              "components": {}
+          }
+          
+          # Check Supabase
+          if supabase_url and supabase_key:
+              try:
+                  from supabase import create_client
+                  client = create_client(supabase_url, supabase_key)
+                  result = client.table("audit_logs").select("count").limit(1).execute()
+                  health["components"]["supabase"] = {"status": "healthy"}
+              except Exception as e:
+                  health["components"]["supabase"] = {"status": "unhealthy", "error": str(e)[:100]}
+                  health["status"] = "degraded"
+          else:
+              health["components"]["supabase"] = {"status": "unknown", "message": "No credentials"}
+          
+          # Output results
+          print(json.dumps(health, indent=2))
+          
+          # Set output
+          with open(os.environ.get("GITHUB_OUTPUT", "/dev/null"), "a") as f:
+              f.write(f"status={health['status']}\n")
+          
+          if health["status"] == "unhealthy":
+              exit(1)
+          HEALTH_SCRIPT
+      
+      - name: Post health summary
+        run: |
+          echo "## 🏥 Health Check Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Overall | ${{ steps.health.outputs.status == 'healthy' && '✅ Healthy' || '⚠️ Issues' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Timestamp | $(date -u +"%Y-%m-%d %H:%M:%S UTC") |" >> $GITHUB_STEP_SUMMARY
+
+  metrics-report:
+    name: Daily Metrics Report
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 0 * * *'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Generate metrics report
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          python << 'METRICS_SCRIPT'
+          import os
+          from datetime import datetime, timezone, timedelta
+          
+          supabase_url = os.environ.get("SUPABASE_URL")
+          supabase_key = os.environ.get("SUPABASE_KEY")
+          
+          if supabase_url and supabase_key:
+              from supabase import create_client
+              client = create_client(supabase_url, supabase_key)
+              
+              # Get audit logs from last 24 hours
+              yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+              
+              result = client.table("audit_logs")\
+                  .select("event_type, status")\
+                  .gte("timestamp", yesterday)\
+                  .execute()
+              
+              events = result.data if result.data else []
+              
+              print(f"📊 Daily Metrics Report")
+              print(f"Total events: {len(events)}")
+              
+              # Count by type
+              by_type = {}
+              for e in events:
+                  t = e.get("event_type", "unknown")
+                  by_type[t] = by_type.get(t, 0) + 1
+              
+              for t, c in sorted(by_type.items()):
+                  print(f"  {t}: {c}")
+          METRICS_SCRIPT
