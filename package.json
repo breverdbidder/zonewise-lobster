@@ -1,0 +1,33 @@
+{
+  "name": "zonewise-lobster",
+  "version": "1.0.0",
+  "description": "ZoneWise deterministic workflows using Moltbot Lobster + Modal.com",
+  "author": "Ariel Shapira <ariel@everestcapitalusa.com>",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "deploy": "modal deploy scripts/zonewise_scraper.py",
+    "test:county": "modal run scripts/zonewise_scraper.py --county-fips 12009 --county-name Brevard",
+    "scrape:all": "lobster run workflows/scrape-all-counties.lobster",
+    "scrape:county": "lobster run workflows/scrape-county.lobster"
+  },
+  "dependencies": {
+    "@clawdbot/lobster": "^2026.1.21"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/breverdbidder/zonewise-lobster.git"
+  },
+  "keywords": [
+    "zonewise",
+    "lobster",
+    "moltbot",
+    "florida",
+    "zoning",
+    "modal"
+  ]
+}
