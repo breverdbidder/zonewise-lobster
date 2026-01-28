@@ -2,7 +2,7 @@
   "name": "zonewise-lobster",
   "version": "1.0.0",
   "description": "ZoneWise deterministic workflows using Moltbot Lobster + Modal.com",
-  "author": "Ariel Shapira <ariel@everestcapitalusa.com>",
+  "author": "ZoneWise.AI <ariel@everestcapitalusa.com>",
   "license": "MIT",
   "private": true,
   "scripts": {
