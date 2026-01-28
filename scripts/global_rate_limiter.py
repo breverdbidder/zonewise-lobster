@@ -8,50 +8,92 @@ Features:
 - Rate limit state persistence (Supabase)
 - Graceful degradation when limits hit
 - Real-time monitoring
+
+Author: BidDeed.AI
+Version: 2.0.0
 """
 
+from __future__ import annotations
+
 import time
-import hashlib
+import threading
 from datetime import datetime, timezone, timedelta
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Any, TYPE_CHECKING
 from dataclasses import dataclass
 from collections import defaultdict
-import threading
+from urllib.parse import urlparse
+import logging
+
+if TYPE_CHECKING:
+    from supabase import Client as SupabaseClient
 
 # Import audit logger
 from security_utils import AuditLogger, AuditEventType
 
+# Configure logging
+logger = logging.getLogger(__name__)
 
-@dataclass
+
+@dataclass(frozen=True)
 class RateLimitConfig:
-    """Configuration for a rate limit rule."""
+    """
+    Configuration for a rate limit rule.
+    
+    Attributes:
+        domain: The domain this config applies to (e.g., 'municode.com')
+        requests_per_minute: Maximum requests allowed per minute
+        requests_per_hour: Maximum requests allowed per hour
+        requests_per_day: Maximum requests allowed per day
+        burst_limit: Maximum concurrent requests (token bucket capacity)
+        cooldown_seconds: Seconds to wait after hitting a limit
+    """
     domain: str
     requests_per_minute: int
     requests_per_hour: int
     requests_per_day: int
-    burst_limit: int  # Max concurrent requests
-    cooldown_seconds: int  # Cooldown after hitting limit
+    burst_limit: int
+    cooldown_seconds: int
 
 
 class TokenBucket:
-    """Token bucket algorithm for rate limiting."""
+    """
+    Token bucket algorithm for rate limiting.
     
-    def __init__(self, capacity: int, refill_rate: float):
+    Implements a thread-safe token bucket that refills at a constant rate.
+    Used for burst limiting - allows short bursts while maintaining
+    average rate limits over time.
+    
+    Attributes:
+        capacity: Maximum number of tokens the bucket can hold
+        refill_rate: Number of tokens added per second
+        tokens: Current number of available tokens
+    """
+    
+    def __init__(self, capacity: int, refill_rate: float) -> None:
         """
+        Initialize a token bucket.
+        
         Args:
             capacity: Maximum tokens in bucket
             refill_rate: Tokens added per second
         """
-        self.capacity = capacity
-        self.refill_rate = refill_rate
-        self.tokens = capacity
-        self.last_refill = time.time()
-        self._lock = threading.Lock()
+        self.capacity: int = capacity
+        self.refill_rate: float = refill_rate
+        self.tokens: float = float(capacity)
+        self.last_refill: float = time.time()
+        self._lock: threading.Lock = threading.Lock()
     
     def consume(self, tokens: int = 1) -> bool:
         """
         Try to consume tokens from bucket.
         
+        Thread-safe method to attempt consuming tokens. If sufficient
+        tokens are available, they are consumed and True is returned.
+        Otherwise, no tokens are consumed and False is returned.
+        
+        Args:
+            tokens: Number of tokens to consume (default: 1)
+            
         Returns:
             True if tokens were consumed, False if rate limited
         """
@@ -62,20 +104,60 @@ class TokenBucket:
                 return True
             return False
     
-    def _refill(self):
-        """Refill tokens based on elapsed time."""
-        now = time.time()
-        elapsed = now - self.last_refill
-        tokens_to_add = elapsed * self.refill_rate
-        self.tokens = min(self.capacity, self.tokens + tokens_to_add)
+    def _refill(self) -> None:
+        """
+        Refill tokens based on elapsed time.
+        
+        Calculates how many tokens should be added based on the time
+        elapsed since the last refill, capped at the bucket capacity.
+        """
+        now: float = time.time()
+        elapsed: float = now - self.last_refill
+        tokens_to_add: float = elapsed * self.refill_rate
+        self.tokens = min(float(self.capacity), self.tokens + tokens_to_add)
         self.last_refill = now
     
     @property
     def available_tokens(self) -> float:
-        """Get current available tokens."""
+        """
+        Get current available tokens.
+        
+        Returns:
+            Current number of available tokens (may be fractional)
+        """
         with self._lock:
             self._refill()
             return self.tokens
+
+
+class RateLimitExceeded(Exception):
+    """
+    Exception raised when rate limit is exceeded.
+    
+    Attributes:
+        reason: Human-readable explanation of why the limit was exceeded
+        domain: The domain that was rate limited
+        retry_after: Suggested seconds to wait before retrying
+    """
+    
+    def __init__(
+        self, 
+        reason: str, 
+        domain: str = "", 
+        retry_after: int = 60
+    ) -> None:
+        """
+        Initialize rate limit exception.
+        
+        Args:
+            reason: Human-readable explanation
+            domain: The rate-limited domain
+            retry_after: Seconds to wait before retrying
+        """
+        super().__init__(reason)
+        self.reason: str = reason
+        self.domain: str = domain
+        self.retry_after: int = retry_after
 
 
 class GlobalRateLimiter:
@@ -83,7 +165,16 @@ class GlobalRateLimiter:
     Global rate limiter with Supabase persistence.
     
     Tracks request counts across all workflows and enforces
-    configurable limits per domain/endpoint.
+    configurable limits per domain/endpoint. Uses a combination
+    of token buckets for burst limiting and sliding window
+    counters for sustained rate limiting.
+    
+    Thread-safe implementation suitable for multi-threaded
+    and async environments.
+    
+    Attributes:
+        supabase: Supabase client for state persistence
+        audit: Optional audit logger for security events
     """
     
     # Default rate limits per domain
@@ -120,7 +211,7 @@ class GlobalRateLimiter:
             burst_limit=5,
             cooldown_seconds=120
         ),
-        "*": RateLimitConfig(  # Default for unknown domains
+        "*": RateLimitConfig(
             domain="*",
             requests_per_minute=60,
             requests_per_hour=1000,
@@ -130,32 +221,73 @@ class GlobalRateLimiter:
         )
     }
     
-    def __init__(self, supabase_client, audit_logger: Optional[AuditLogger] = None):
-        self.supabase = supabase_client
-        self.audit = audit_logger
+    def __init__(
+        self, 
+        supabase_client: SupabaseClient, 
+        audit_logger: Optional[AuditLogger] = None
+    ) -> None:
+        """
+        Initialize the global rate limiter.
+        
+        Args:
+            supabase_client: Supabase client for state persistence
+            audit_logger: Optional audit logger for security events
+        """
+        self.supabase: SupabaseClient = supabase_client
+        self.audit: Optional[AuditLogger] = audit_logger
         self._buckets: Dict[str, TokenBucket] = {}
-        self._request_counts: Dict[str, Dict[str, int]] = defaultdict(lambda: {
-            "minute": 0,
-            "hour": 0,
-            "day": 0,
-            "last_reset_minute": datetime.now(timezone.utc),
-            "last_reset_hour": datetime.now(timezone.utc),
-            "last_reset_day": datetime.now(timezone.utc)
-        })
+        self._request_counts: Dict[str, Dict[str, Any]] = defaultdict(
+            lambda: {
+                "minute": 0,
+                "hour": 0,
+                "day": 0,
+                "last_reset_minute": datetime.now(timezone.utc),
+                "last_reset_hour": datetime.now(timezone.utc),
+                "last_reset_day": datetime.now(timezone.utc)
+            }
+        )
         self._cooldowns: Dict[str, datetime] = {}
-        self._lock = threading.Lock()
+        self._lock: threading.Lock = threading.Lock()
     
     def _get_domain(self, url: str) -> str:
-        """Extract domain from URL."""
+        """
+        Extract domain from URL.
+        
+        Parses the URL and extracts the network location (domain).
+        Returns '*' as fallback for unparseable URLs.
+        
+        Args:
+            url: Full URL to parse (e.g., 'https://example.com/path')
+            
+        Returns:
+            Lowercase domain string (e.g., 'example.com') or '*' on error
+            
+        Example:
+            >>> limiter._get_domain('https://api.municode.com/v1/data')
+            'api.municode.com'
+        """
         try:
-            from urllib.parse import urlparse
             parsed = urlparse(url)
-            return parsed.netloc.lower()
-        except Exception:
+            return parsed.netloc.lower() if parsed.netloc else "*"
+        except (ValueError, AttributeError) as e:
+            logger.warning(f"Failed to parse URL '{url}': {e}")
             return "*"
     
     def _get_config(self, domain: str) -> RateLimitConfig:
-        """Get rate limit config for domain."""
+        """
+        Get rate limit config for domain.
+        
+        Looks up configuration in priority order:
+        1. Exact domain match
+        2. Parent domain match (for subdomains)
+        3. Default wildcard config
+        
+        Args:
+            domain: Domain to get config for
+            
+        Returns:
+            RateLimitConfig for the domain
+        """
         # Check for exact match
         if domain in self.DEFAULT_LIMITS:
             return self.DEFAULT_LIMITS[domain]
@@ -169,10 +301,20 @@ class GlobalRateLimiter:
         return self.DEFAULT_LIMITS["*"]
     
     def _get_bucket(self, domain: str) -> TokenBucket:
-        """Get or create token bucket for domain."""
+        """
+        Get or create token bucket for domain.
+        
+        Creates a new token bucket if one doesn't exist for the domain,
+        configured with the appropriate burst limit and refill rate.
+        
+        Args:
+            domain: Domain to get bucket for
+            
+        Returns:
+            TokenBucket instance for the domain
+        """
         if domain not in self._buckets:
             config = self._get_config(domain)
-            # Refill rate = requests per minute / 60 seconds
             refill_rate = config.requests_per_minute / 60.0
             self._buckets[domain] = TokenBucket(
                 capacity=config.burst_limit,
@@ -184,25 +326,43 @@ class GlobalRateLimiter:
         """
         Check if domain is in cooldown.
         
+        After hitting a rate limit, domains enter a cooldown period
+        where all requests are rejected. This prevents hammering
+        the external service.
+        
+        Args:
+            domain: Domain to check cooldown for
+            
         Returns:
-            Tuple of (in_cooldown, seconds_remaining)
+            Tuple of (in_cooldown: bool, seconds_remaining: int)
         """
         if domain not in self._cooldowns:
             return False, 0
         
-        cooldown_end = self._cooldowns[domain]
-        now = datetime.now(timezone.utc)
+        cooldown_end: datetime = self._cooldowns[domain]
+        now: datetime = datetime.now(timezone.utc)
         
         if now < cooldown_end:
-            remaining = (cooldown_end - now).total_seconds()
-            return True, int(remaining)
+            remaining: int = int((cooldown_end - now).total_seconds())
+            return True, remaining
         
         # Cooldown expired
         del self._cooldowns[domain]
         return False, 0
     
-    def _update_counts(self, domain: str) -> Dict[str, int]:
-        """Update and return request counts for domain."""
+    def _update_counts(self, domain: str) -> Dict[str, Any]:
+        """
+        Update and return request counts for domain.
+        
+        Resets counters if their time window has elapsed.
+        Thread-safe implementation.
+        
+        Args:
+            domain: Domain to update counts for
+            
+        Returns:
+            Dictionary with current counts and reset timestamps
+        """
         with self._lock:
             counts = self._request_counts[domain]
             now = datetime.now(timezone.utc)
@@ -228,15 +388,20 @@ class GlobalRateLimiter:
         """
         Acquire permission to make a request.
         
+        Checks all rate limits (cooldown, burst, minute/hour/day) and
+        either allows the request or returns the reason for rejection.
+        
         Args:
             url: URL to request
-            workflow_id: ID of requesting workflow
+            workflow_id: ID of requesting workflow for audit logging
             
         Returns:
-            Tuple of (allowed, reason)
+            Tuple of (allowed: bool, reason: str)
+            - If allowed: (True, "OK")
+            - If rejected: (False, "reason for rejection")
         """
-        domain = self._get_domain(url)
-        config = self._get_config(domain)
+        domain: str = self._get_domain(url)
+        config: RateLimitConfig = self._get_config(domain)
         
         # Check cooldown first
         in_cooldown, remaining = self._check_cooldown(domain)
@@ -246,9 +411,8 @@ class GlobalRateLimiter:
             return False, reason
         
         # Check token bucket (burst limit)
-        bucket = self._get_bucket(domain)
+        bucket: TokenBucket = self._get_bucket(domain)
         if not bucket.consume():
-            # Enter cooldown
             self._cooldowns[domain] = datetime.now(timezone.utc) + timedelta(
                 seconds=config.cooldown_seconds
             )
@@ -257,7 +421,7 @@ class GlobalRateLimiter:
             return False, reason
         
         # Check request counts
-        counts = self._update_counts(domain)
+        counts: Dict[str, Any] = self._update_counts(domain)
         
         if counts["minute"] >= config.requests_per_minute:
             reason = f"Minute limit ({config.requests_per_minute}/min) exceeded for {domain}"
@@ -285,8 +449,23 @@ class GlobalRateLimiter:
         
         return True, "OK"
     
-    def _log_rate_limit(self, domain: str, workflow_id: str, reason: str):
-        """Log rate limit event."""
+    def _log_rate_limit(
+        self, 
+        domain: str, 
+        workflow_id: str, 
+        reason: str
+    ) -> None:
+        """
+        Log rate limit event to audit trail.
+        
+        Records when a request is blocked due to rate limiting,
+        including the domain, workflow, and specific reason.
+        
+        Args:
+            domain: Domain that was rate limited
+            workflow_id: ID of the workflow that was blocked
+            reason: Human-readable reason for the block
+        """
         if self.audit:
             self.audit.log(
                 event_type=AuditEventType.SECURITY_VIOLATION,
@@ -297,12 +476,30 @@ class GlobalRateLimiter:
                     "domain": domain,
                     "workflow_id": workflow_id,
                     "reason": reason,
-                    "config": self._get_config(domain).__dict__
+                    "config": {
+                        "domain": self._get_config(domain).domain,
+                        "requests_per_minute": self._get_config(domain).requests_per_minute,
+                        "requests_per_hour": self._get_config(domain).requests_per_hour,
+                    }
                 }
             )
     
-    def _persist_counts_async(self, domain: str, counts: Dict):
-        """Persist counts to Supabase asynchronously."""
+    def _persist_counts_async(
+        self, 
+        domain: str, 
+        counts: Dict[str, Any]
+    ) -> None:
+        """
+        Persist counts to Supabase asynchronously.
+        
+        Non-blocking persistence of rate limit state. Failures are
+        logged but don't affect the request - rate limiting continues
+        to work with in-memory state.
+        
+        Args:
+            domain: Domain to persist counts for
+            counts: Dictionary with current counts and timestamps
+        """
         try:
             self.supabase.table("rate_limit_state").upsert({
                 "domain": domain,
@@ -314,13 +511,36 @@ class GlobalRateLimiter:
                 "last_reset_day": counts["last_reset_day"].isoformat(),
                 "updated_at": datetime.now(timezone.utc).isoformat()
             }).execute()
-        except Exception:
-            pass  # Non-critical, don't fail request
+        except (ConnectionError, TimeoutError) as e:
+            logger.warning(f"Failed to persist rate limit state: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error persisting rate limit state: {e}")
     
-    def get_status(self) -> Dict[str, Dict]:
-        """Get current rate limit status for all domains."""
-        status = {}
-        for domain in list(self._request_counts.keys()) + list(self.DEFAULT_LIMITS.keys()):
+    def get_status(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Get current rate limit status for all domains.
+        
+        Returns a snapshot of the current rate limit state including
+        request counts, available burst capacity, and cooldown status.
+        
+        Returns:
+            Dictionary mapping domain names to their status:
+            {
+                "domain.com": {
+                    "requests_minute": "5/30",
+                    "requests_hour": "100/500",
+                    "requests_day": "1000/5000",
+                    "burst_available": 8,
+                    "in_cooldown": False,
+                    "cooldown_remaining": 0
+                }
+            }
+        """
+        status: Dict[str, Dict[str, Any]] = {}
+        
+        all_domains = set(self._request_counts.keys()) | set(self.DEFAULT_LIMITS.keys())
+        
+        for domain in all_domains:
             if domain == "*":
                 continue
             
@@ -341,40 +561,91 @@ class GlobalRateLimiter:
         return status
 
 
-# =============================================================================
-# Rate-Limited HTTP Client
-# =============================================================================
-
 class RateLimitedClient:
-    """HTTP client with built-in rate limiting."""
+    """
+    HTTP client with built-in rate limiting.
     
-    def __init__(self, rate_limiter: GlobalRateLimiter, workflow_id: str):
-        self.limiter = rate_limiter
-        self.workflow_id = workflow_id
+    Wraps HTTP requests with automatic rate limit checking.
+    Raises RateLimitExceeded if the request would exceed limits.
     
-    async def get(self, url: str, **kwargs) -> Optional[object]:
-        """Rate-limited GET request."""
+    Attributes:
+        limiter: GlobalRateLimiter instance
+        workflow_id: ID of the current workflow for audit logging
+    """
+    
+    def __init__(
+        self, 
+        rate_limiter: GlobalRateLimiter, 
+        workflow_id: str
+    ) -> None:
+        """
+        Initialize rate-limited client.
+        
+        Args:
+            rate_limiter: GlobalRateLimiter to use for checking limits
+            workflow_id: ID of the workflow making requests
+        """
+        self.limiter: GlobalRateLimiter = rate_limiter
+        self.workflow_id: str = workflow_id
+    
+    async def get(
+        self, 
+        url: str, 
+        **kwargs: Any
+    ) -> Any:
+        """
+        Rate-limited GET request.
+        
+        Args:
+            url: URL to request
+            **kwargs: Additional arguments passed to httpx.get()
+            
+        Returns:
+            httpx.Response object
+            
+        Raises:
+            RateLimitExceeded: If rate limit would be exceeded
+        """
         import httpx
         
         allowed, reason = self.limiter.acquire(url, self.workflow_id)
         if not allowed:
-            raise RateLimitExceeded(reason)
+            raise RateLimitExceeded(
+                reason=reason,
+                domain=self.limiter._get_domain(url),
+                retry_after=60
+            )
         
         async with httpx.AsyncClient(timeout=30) as client:
             return await client.get(url, **kwargs)
     
-    async def post(self, url: str, **kwargs) -> Optional[object]:
-        """Rate-limited POST request."""
+    async def post(
+        self, 
+        url: str, 
+        **kwargs: Any
+    ) -> Any:
+        """
+        Rate-limited POST request.
+        
+        Args:
+            url: URL to request
+            **kwargs: Additional arguments passed to httpx.post()
+            
+        Returns:
+            httpx.Response object
+            
+        Raises:
+            RateLimitExceeded: If rate limit would be exceeded
+        """
         import httpx
         
         allowed, reason = self.limiter.acquire(url, self.workflow_id)
         if not allowed:
-            raise RateLimitExceeded(reason)
+            raise RateLimitExceeded(
+                reason=reason,
+                domain=self.limiter._get_domain(url),
+                retry_after=60
+            )
         
         async with httpx.AsyncClient(timeout=30) as client:
             return await client.post(url, **kwargs)
-
-
-class RateLimitExceeded(Exception):
-    """Raised when rate limit is exceeded."""
-    pass
