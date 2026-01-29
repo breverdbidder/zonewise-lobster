@@ -1,30 +1,45 @@
-# ZoneWise.AI Brand Colors
+# ZoneWise.AI Official Brand Colors
 
-## Primary Brand Color
-- **Hex**: `#03B3CB`
-- **RGB**: `rgb(3, 179, 203)`
-- **HSL**: `hsl(187, 97%, 40%)`
+## Primary Palette
+| Color | Name | Hex | Usage |
+|-------|------|-----|-------|
+| 🔵 | **Navy Blue** | `#1E3A5F` | Primary brand, headers, navigation |
+| 🟠 | **Orange** | `#F59E0B` | Accents, CTAs, highlights |
+| ⬜ | **White** | `#FFFFFF` | Backgrounds, text on dark |
 
-## Background Colors
-- **Dark Background**: `#1A1A1A` (logo background)
-- **Dark Alt**: `#2D2D2D`
-
-## Semantic Colors (for UI)
-- **Primary**: `#03B3CB` (ZoneWise Cyan)
-- **Primary Dark**: `#028A9E` (hover states)
-- **Primary Light**: `#04D4F0` (highlights)
+## Secondary Palette (Optional)
+| Color | Name | Hex | Usage |
+|-------|------|-----|-------|
+| 🔷 | **Cyan** | `#03B3CB` | Secondary accent, tech elements |
+| 🔹 | **Light Blue** | `#E8F4FD` | Subtle backgrounds |
 
 ## Status Colors
-- **Permitted (Green)**: `#10B981`
-- **Conditional (Orange)**: `#F59E0B`
-- **Prohibited (Red)**: `#EF4444`
+| Color | Name | Hex | Usage |
+|-------|------|-----|-------|
+| 🟢 | **Permitted** | `#10B981` | Allowed uses |
+| 🟡 | **Conditional** | `#F59E0B` | CUP required |
+| 🔴 | **Prohibited** | `#EF4444` | Not allowed |
 
-## Text Colors
-- **On Dark**: `#FFFFFF`
-- **On Light**: `#1A1A1A`
-- **Muted**: `#9CA3AF`
+## Background Colors
+| Color | Name | Hex | Usage |
+|-------|------|-----|-------|
+| ⬜ | **Light** | `#FFFFFF` | Primary background |
+| 📄 | **Paper** | `#F9FAFB` | Secondary background |
+| ⬛ | **Dark** | `#1A1A1A` | Dark mode background |
 
-## Usage Guidelines
-- Logo should appear on dark backgrounds (#1A1A1A or darker)
-- Primary cyan (#03B3CB) for CTAs, links, and brand elements
-- Maintain high contrast for accessibility
+## Typography
+- **Primary Font**: Inter, Arial, sans-serif
+- **Headings**: Bold, Navy Blue
+- **Body**: Regular, Dark Gray (#374151)
+
+## Logo Usage
+- Primary logo on white/light backgrounds
+- Reversed (white) logo on navy backgrounds
+- Minimum clear space: Height of "Z" on all sides
+- Minimum size: 120px wide for digital
+
+## Do Not
+- ❌ Use cyan as primary color
+- ❌ Place logo on busy backgrounds
+- ❌ Stretch or distort logo
+- ❌ Use colors not in this palette
